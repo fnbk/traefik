@@ -40,6 +40,7 @@ type Configuration struct {
 	DNSChallenge   *DNSChallenge  `description:"Activate DNS-01 Challenge." json:"dnsChallenge,omitempty" toml:"dnsChallenge,omitempty" yaml:"dnsChallenge,omitempty" label:"allowEmpty"`
 	HTTPChallenge  *HTTPChallenge `description:"Activate HTTP-01 Challenge." json:"httpChallenge,omitempty" toml:"httpChallenge,omitempty" yaml:"httpChallenge,omitempty" label:"allowEmpty"`
 	TLSChallenge   *TLSChallenge  `description:"Activate TLS-ALPN-01 Challenge." json:"tlsChallenge,omitempty" toml:"tlsChallenge,omitempty" yaml:"tlsChallenge,omitempty" label:"allowEmpty"`
+	EAB            *EAB           `description:"External Account Binding Configuration." json:"eab,omitempty" toml:"eab,omitempty" yaml:"eab,omitempty" label:"allowEmpty" file:"allowEmpty"`
 }
 
 // SetDefaults sets the default values.
@@ -77,6 +78,12 @@ type HTTPChallenge struct {
 
 // TLSChallenge contains TLS challenge Configuration.
 type TLSChallenge struct{}
+
+// EAB contains External Account Binding Configuration.
+type EAB struct {
+	Kid         string `description:"KeyId for External Account Binding" json:"kid,omitempty" toml:"kid,omitempty" yaml:"kid,omitempty"`
+	HmacEncoded string `description:"Containing the Hmac secret" json:"hmacEncoded,omitempty" toml:"hmacEncoded,omitempty" yaml:"hmacEncoded,omitempty"`
+}
 
 // Provider holds configurations of the provider.
 type Provider struct {
@@ -229,9 +236,16 @@ func (p *Provider) getClient() (*lego.Client, error) {
 
 	// New users will need to register; be sure to save it
 	if account.GetRegistration() == nil {
-		logger.Info("Register...")
+		var reg *registration.Resource
+		var errR error
 
-		reg, errR := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+		if p.EAB == nil {
+			logger.Info("Register account")
+			reg, errR = client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
+		} else {
+			logger.Info("Register with external account binding")
+			reg, errR = client.Registration.RegisterWithExternalAccountBinding(registration.RegisterEABOptions{TermsOfServiceAgreed: true, Kid: p.EAB.Kid, HmacEncoded: p.EAB.HmacEncoded})
+		}
 		if errR != nil {
 			return nil, errR
 		}
